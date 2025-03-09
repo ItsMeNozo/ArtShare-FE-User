@@ -6,42 +6,76 @@ import { FaApple } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/firebase"; // Import firebase authentication
+import { useAuthStore } from "@/stores/authStore"; // Import the auth store
+import { auth } from "@/firebase";
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
-  signInWithPopup,
   FacebookAuthProvider,
+  signInWithPopup,
 } from "firebase/auth";
+import { login, forgotPassword, signup } from "@/api/authentication/auth"; // API functions
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate(); // Use useNavigate to programmatically navigate
+  const [resetEmail, setResetEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const navigate = useNavigate(); // To navigate programmatically
+
+  // Use auth store for sign in and error handling
+  const {
+    setError: setStoreError,
+    loginWithEmail,
+    error: storeError,
+  } = useAuthStore();
 
   // Handle Email/Password login
-  const handleEmailLogin = async (e: any) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      console.log("Logged in with email");
-      // Redirect to home after successful login
+      await loginWithEmail(email, password);
+      if (storeError) {
+        setError(storeError);
+        return;
+      }
       navigate("/home");
     } catch (error: any) {
-      console.error("Error logging in with email:", error.message);
+      setError(error.message);
+      setStoreError(error.message);
     }
   };
-
   // Handle Google login
   const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      console.log("Logged in with Google");
-      // Redirect to home after successful login
-      navigate("/home");
+      // Sign in using Google
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Get the Firebase token
+      const token = await user.getIdToken();
+
+      // Send the Firebase token to the backend for verification and to check if the user exists
+      const response = await login(token);
+
+      // If the user exists and is verified, proceed with login and navigate to home
+      if (response.userExists) {
+        navigate("/home"); // Redirect to home page after successful login
+      } else {
+        // If user doesn't exist, sign them up and proceed to home
+        const signupResponse = await signup(
+          user.email!,
+          "",
+          user.displayName || ""
+        ); // Call signup API (user.email, no password needed)
+        console.log("User registered in backend:", signupResponse);
+
+        navigate("/home"); // Redirect to home after successful sign-up
+      }
     } catch (error: any) {
+      setError(error.message); // Set the error message
       console.error("Error logging in with Google:", error.message);
     }
   };
@@ -50,12 +84,29 @@ const Login = () => {
   const handleFacebookLogin = async () => {
     const provider = new FacebookAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      console.log("Logged in with Facebook");
-      // Redirect to home after successful login
-      navigate("/home");
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const token = await user.getIdToken(); // Get the Firebase token
+
+      // Send the Firebase token to the backend for verification
+      const response = await login(token);
+      console.log(response);
+      navigate("/home"); // Redirect to home after successful login
     } catch (error: any) {
+      setError(error.message);
       console.error("Error logging in with Facebook:", error.message);
+    }
+  };
+
+  // Handle Password Reset
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await forgotPassword(resetEmail); // Call the forgot password API
+      setIsResettingPassword(false);
+      alert("Password reset link sent to your email.");
+    } catch (error: any) {
+      setError(error.message);
     }
   };
 
@@ -72,53 +123,100 @@ const Login = () => {
           It's nice to see you again. Ready to showcase your art?
         </p>
       </div>
-      <form onSubmit={handleEmailLogin} className="space-y-4">
+
+      {/* Password reset logic */}
+      {isResettingPassword ? (
         <div>
-          <label
-            htmlFor="email"
-            className="block font-semibold text-gray-600 text-sm"
+          <h3 className="text-lg font-bold">Reset your password</h3>
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <div>
+              <label
+                htmlFor="resetEmail"
+                className="block font-semibold text-gray-600 text-sm"
+              >
+                Enter your email
+              </label>
+              <Input
+                type="email"
+                placeholder="Enter your email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
+              />
+            </div>
+            <div className="flex justify-between items-center mt-4">
+              <Button
+                type="submit"
+                className="bg-gray-800 hover:bg-gray-700 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10 font-bold text-white"
+              >
+                Reset Password
+              </Button>
+            </div>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+          </form>
+          <div className="mt-4 text-sm">
+            <button
+              onClick={() => setIsResettingPassword(false)}
+              className="text-blue-600"
+            >
+              Go back to Login
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleEmailLogin} className="space-y-4">
+          <div>
+            <label
+              htmlFor="email"
+              className="block font-semibold text-gray-600 text-sm"
+            >
+              Email
+            </label>
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="password"
+              className="block font-medium text-gray-600 text-sm"
+            >
+              Password
+            </label>
+            <Input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
+            />
+          </div>
+          <div className="flex justify-between items-center mt-4">
+            <label className="flex items-center text-gray-500 text-sm">
+              <input type="checkbox" className="mr-2" />
+              Remember me
+            </label>
+            <button
+              onClick={() => setIsResettingPassword(true)}
+              className="text-blue-600 text-sm"
+            >
+              Forgot password?
+            </button>
+          </div>
+          <Button
+            type="submit"
+            className="bg-gray-800 hover:bg-gray-700 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10 font-bold text-white"
           >
-            Email
-          </label>
-          <Input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="password"
-            className="block font-medium text-gray-600 text-sm"
-          >
-            Password
-          </label>
-          <Input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
-          />
-        </div>
-        <div className="flex justify-between items-center mt-4">
-          <label className="flex items-center text-gray-500 text-sm">
-            <input type="checkbox" className="mr-2" />
-            Remember me
-          </label>
-          <a href="#" className="text-blue-600 text-sm">
-            Forgot username or password?
-          </a>
-        </div>
-        <Button
-          type="submit"
-          className="bg-gray-800 hover:bg-gray-700 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10 font-bold text-white"
-        >
-          Login
-        </Button>
-      </form>
+            Login
+          </Button>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+        </form>
+      )}
+
       <div className="flex items-center space-x-4 mt-6 text-center">
         <hr className="border-gray-900 border-t-1 w-full" />
         <div className="text-gray-600 text-sm">Or</div>
@@ -163,7 +261,7 @@ const Login = () => {
 
       <div className="mt-6 text-left">
         <p className="text-gray-600 text-sm">
-          Don’t have an account?
+          Don’t have an account?{" "}
           <Link to="/signup" className="ml-2 text-blue-600">
             Register
           </Link>

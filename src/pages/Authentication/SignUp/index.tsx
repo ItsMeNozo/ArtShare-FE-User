@@ -6,56 +6,102 @@ import { FaApple } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/stores/authStore"; // Import the auth store
 import { auth } from "@/firebase"; // Import firebase authentication
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
   FacebookAuthProvider,
+  sendEmailVerification,
 } from "firebase/auth";
+import { login, signup } from "@/api/authentication/auth";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null); // For handling error messages
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate(); // To navigate to the home page on successful sign-up
+  const { setUser } = useAuthStore(); // Using the auth store to set user
 
-  // Handle Sign-up with email/password
-  const handleEmailSignUp = async (e: any) => {
+  // Handle Email Sign-Up
+  const handleEmailSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Get the email and password from the state
+    if (!email || !password) {
+      setError("Please enter all required fields.");
+      return;
+    }
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      console.log("User created successfully");
-      // Redirect to home after successful sign-up
-      navigate("/home");
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+
+      // Check if the user's email is verified
+      if (!user.emailVerified) {
+        await sendEmailVerification(user); // Resend verification email if it's not verified
+        setError("Please verify your email before proceeding.");
+        navigate("/verify-email"); // Redirect to verify email page
+        return;
+      }
+
+      // Call the backend API to register the user
+      const response = await signup(email, password, ""); // Send additional data like username
+      console.log("User registered in backend:", response);
+
+      // Email is verified, allow account creation to proceed
+      setUser(user); // Store user in state
+      navigate("/home"); // Redirect to home page after successful sign-up
     } catch (error: any) {
-      setError(error.message); // Capture the error message
+      setError(error.message); // Capture any error messages during the sign-up process
       console.error("Error signing up with email:", error.message);
     }
   };
 
-  // Handle Google sign-up
+  // Handle Google Sign-Up
   const handleGoogleSignUp = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      console.log("User signed up with Google");
-      // Redirect to home after successful sign-up
-      navigate("/home");
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+
+      // Get the Firebase token
+      const token = await user.getIdToken();
+
+      // Call the backend API to register the user using the Firebase token
+      const response = await signup(user.email!, "", ""); // Use email as username or other details if needed
+      console.log("User signed up with Google:", response);
+
+      setUser(user);
+      navigate("/home"); // Redirect to home after successful sign-up
     } catch (error: any) {
       setError(error.message); // Capture the error message
       console.error("Error signing up with Google:", error.message);
     }
   };
 
-  // Handle Facebook sign-up
+  // Handle Facebook Sign-Up
   const handleFacebookSignUp = async () => {
     const provider = new FacebookAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      console.log("User signed up with Facebook");
-      // Redirect to home after successful sign-up
-      navigate("/home");
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+
+      // Get the Firebase token
+      const token = await user.getIdToken();
+
+      // Call the backend API to register the user using the Firebase token
+      const response = await signup(user.email!, "", ""); // Use email as username or other details if needed
+      console.log("User signed up with Facebook:", response);
+
+      setUser(user);
+      navigate("/home"); // Redirect to home after successful sign-up
     } catch (error: any) {
       setError(error.message); // Capture the error message
       console.error("Error signing up with Facebook:", error.message);
@@ -145,8 +191,7 @@ const SignUp = () => {
             className="shadow-sm mt-1 p-3 border border-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-10"
           />
         </div>
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}{" "}
-        {/* Display error message */}
+        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         <div className="flex justify-between items-center mt-4">
           <span className="text-gray-600 text-sm">
             Your password must be at least 8 characters, numbers and symbols.

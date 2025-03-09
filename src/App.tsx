@@ -11,8 +11,12 @@ import Login from "@/pages/Authentication/Login";
 import SignUp from "./pages/Authentication/SignUp";
 import { AuthenLayout } from "./layouts/public/AuthenLayout";
 import Home from "./pages/home"; // Add the Home component
+import VerifyEmail from "./pages/Authentication/Verify-Email"; // Import the VerifyEmail component
+import { useAuthStore } from "@/stores/authStore"; // Import the auth store
 
 const App: React.FC = () => {
+  const { user } = useAuthStore((state) => state); // Get user from the auth store
+
   return (
     <Router>
       <Layout>
@@ -33,10 +37,14 @@ const App: React.FC = () => {
               </AuthenLayout>
             }
           />
+
+          {/* Protected route for /home */}
           <Route
             path="/home"
-            element={<Home />} // Add the Home route
+            element={user ? <Home /> : <Navigate to="/login" />} // Only allow access if user is logged in
           />
+
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </Layout>
