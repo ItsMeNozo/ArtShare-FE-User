@@ -28,54 +28,57 @@ const Login = () => {
   const {
     setError: setStoreError,
     loginWithEmail,
+    signUpWithGoogle,
     error: storeError,
+    token,
+    user,
   } = useAuthStore();
 
-  // Handle Email/Password login
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
     try {
-      await loginWithEmail(email, password);
+      await loginWithEmail(email, password); // Call authStore to handle email login
       if (storeError) {
-        setError(storeError);
+        setError(storeError); // Handle error if login failed
         return;
       }
-      navigate("/home");
+      navigate("/home"); // Redirect to home after successful login
     } catch (error: any) {
-      setError(error.message);
+      setError(error.message); // Set error from the store if something goes wrong
       setStoreError(error.message);
     }
   };
+
   // Handle Google login
   const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      // Sign in using Google
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Get the Firebase token
-      const token = await user.getIdToken();
-
+      const result = await signUpWithGoogle();
+      console.log(token);
       // Send the Firebase token to the backend for verification and to check if the user exists
-      const response = await login(token);
+      const response = await login(token!);
 
-      // If the user exists and is verified, proceed with login and navigate to home
-      if (response.userExists) {
+      if (response.uid !== null) {
         navigate("/home"); // Redirect to home page after successful login
       } else {
-        // If user doesn't exist, sign them up and proceed to home
+        // If user doesn't exist, call signup API
         const signupResponse = await signup(
           user.email!,
           "",
           user.displayName || ""
-        ); // Call signup API (user.email, no password needed)
+        );
         console.log("User registered in backend:", signupResponse);
 
         navigate("/home"); // Redirect to home after successful sign-up
       }
     } catch (error: any) {
-      setError(error.message); // Set the error message
+      setError(error.message); // Handle any errors
       console.error("Error logging in with Google:", error.message);
     }
   };
@@ -90,8 +93,20 @@ const Login = () => {
 
       // Send the Firebase token to the backend for verification
       const response = await login(token);
-      console.log(response);
-      navigate("/home"); // Redirect to home after successful login
+
+      if (response.uid !== null) {
+        navigate("/home"); // Redirect to home page after successful login
+      } else {
+        // If user doesn't exist, call signup API
+        const signupResponse = await signup(
+          user.email!,
+          "",
+          user.displayName || ""
+        );
+        console.log("User registered in backend:", signupResponse);
+
+        navigate("/home"); // Redirect to home after successful sign-up
+      }
     } catch (error: any) {
       setError(error.message);
       console.error("Error logging in with Facebook:", error.message);

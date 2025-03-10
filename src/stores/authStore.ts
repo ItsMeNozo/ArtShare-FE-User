@@ -9,26 +9,33 @@ import {
   FacebookAuthProvider,
   sendEmailVerification,
 } from 'firebase/auth';
+import { login, signup } from '@/api/authentication/auth'; // Import API calls for backend
 
 interface AuthState {
   user: any | null;
   error: string | null;
+  token: string | null; // Added token to the state
   setUser: (user: any) => void;
   clearUser: () => void;
   setError: (error: string) => void;
+  setToken: (token: string) => void; // Set token in the state
   signUpWithEmail: (email: string, password: string) => void;
   loginWithEmail: (email: string, password: string) => void;
   logout: () => void;
   signUpWithGoogle: () => void;
+  loginWithGoogle: () => void;  // Added loginWithGoogle for login functionality
   signUpWithFacebook: () => void;
+  loginWithFacebook: () => void; // Added loginWithFacebook for login functionality
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
+  token: null,  // Store the token
   error: null,
   setUser: (user) => set({ user }),
-  clearUser: () => set({ user: null }),
+  clearUser: () => set({ user: null, token: null }),  // Clear user and token
   setError: (error) => set({ error }),
+  setToken: (token) => set({ token }),  // Set the token
 
   // Sign Up with Email
   signUpWithEmail: async (email, password) => {
@@ -57,31 +64,110 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
 
-      set({ user });
+      const token = await user.getIdToken();
+      set({ user, token });  // Set both user and token in the state
     } catch (error: any) {
       set({ error: error.message });
     }
   },
 
-  // Google Sign-Up
+  // Google Sign-Up (for users not existing in the backend)
   signUpWithGoogle: async () => {
     const provider = new GoogleAuthProvider();
     try {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
-      set({ user });
+      const token = await user.getIdToken();  // Get Firebase token
+      set({ user, token });
+
+      // Optionally send the token to the backend to check if the user exists
+      const response = await login(token);
+
+      if (response.uid) {
+        // If user exists, proceed to home
+        set({ user });
+      } else {
+        // If user doesn't exist, sign them up
+        const signupResponse = await signup(user.email!, "", user.displayName || "");
+        console.log("User registered in backend:", signupResponse);
+        set({ user });
+      }
     } catch (error: any) {
       set({ error: error.message });
     }
   },
 
-  // Facebook Sign-Up
+  // Google Login (Check if the user exists or not)
+  loginWithGoogle: async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      const token = await user.getIdToken();  // Get Firebase token
+
+      // Send the Firebase token to the backend for verification
+      const response = await login(token);
+
+      if (response.uid) {
+        // If user exists, proceed to home
+        set({ user });
+      } else {
+        // If user doesn't exist, sign them up
+        const signupResponse = await signup(user.email!, "", user.displayName || "");
+        console.log("User registered in backend:", signupResponse);
+        set({ user });
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  // Facebook Sign-Up (for users not existing in the backend)
   signUpWithFacebook: async () => {
     const provider = new FacebookAuthProvider();
     try {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
-      set({ user });
+      const token = await user.getIdToken();  // Get Firebase token
+      set({ user, token });
+
+      // Optionally send the token to the backend to check if the user exists
+      const response = await login(token);
+
+      if (response.uid) {
+        // If user exists, proceed to home
+        set({ user });
+      } else {
+        // If user doesn't exist, sign them up
+        const signupResponse = await signup(user.email!, "", user.displayName || "");
+        console.log("User registered in backend:", signupResponse);
+        set({ user });
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  // Facebook Login (Check if the user exists or not)
+  loginWithFacebook: async () => {
+    const provider = new FacebookAuthProvider();
+    try {
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      const token = await user.getIdToken();  // Get Firebase token
+
+      // Send the Firebase token to the backend for verification
+      const response = await login(token);
+
+      if (response.uid) {
+        // If user exists, proceed to home
+        set({ user });
+      } else {
+        // If user doesn't exist, sign them up
+        const signupResponse = await signup(user.email!, "", user.displayName || "");
+        console.log("User registered in backend:", signupResponse);
+        set({ user });
+      }
     } catch (error: any) {
       set({ error: error.message });
     }
@@ -91,7 +177,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     try {
       await signOut(auth);
-      set({ user: null });
+      set({ user: null, token: null });
     } catch (error: any) {
       set({ error: error.message });
     }
