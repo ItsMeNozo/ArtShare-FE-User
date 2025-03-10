@@ -113,15 +113,21 @@ const Login = () => {
     }
   };
 
-  // Handle Password Reset
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!resetEmail) {
+      setError("Please enter a valid email.");
+      return;
+    }
+
     try {
-      await forgotPassword(resetEmail); // Call the forgot password API
-      setIsResettingPassword(false);
-      alert("Password reset link sent to your email.");
+      await sendPasswordResetEmail(auth, resetEmail); // Firebase service to send password reset email
+      setIsResettingPassword(false); // Hide the reset form
+      alert("Password reset link sent to your email."); // Inform the user
     } catch (error: any) {
-      setError(error.message);
+      setError(error.message); // Capture and display error message if it occurs
+      console.error("Error resetting password:", error.message);
     }
   };
 
